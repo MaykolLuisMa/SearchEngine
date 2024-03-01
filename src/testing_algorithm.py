@@ -2,16 +2,17 @@ from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_
 from dataset import *
 import random
     
-def evaluate(data_name = "mmarco/en"):
+def evaluate(data_name = "cranfield"):
     dataset = ir_datasets.load(data_name)
-    
+
     documents = get_limited_dataset(dataset)
 
     querys = get_querys(dataset)
+
     evaluations_list = [[],[],[],[],[],[],[]]
     for query in querys:
         model_documents = []
-        right_documents_id = get_right_documents(query.id,dataset)
+        right_documents_id = get_right_documents(query.query_id,dataset)
         model_classification, right_classification = get_classification(documents,model_documents,right_documents_id)
         evaluations = evaluate_all(model_classification, right_classification)
         print_evaluation(query.text,evaluations[0],evaluations[1],evaluations[2],evaluations[3],evaluations[4],evaluations[5],evaluations[6])

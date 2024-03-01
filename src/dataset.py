@@ -9,13 +9,33 @@ import nltk
 nlp = spacy.load("en_core_web_sm")
 
 class Corpus:
-    def __init__(self,document_vectors,word_vectors) -> None:
-        self.document_vectors = document_vectors
-        self.word_vectors = word_vectors
-        self.dictionary = load_dictionary()
-        self.coo_matrix = load_co_matrix()
+    def __init__(self) -> None:
+        self.document_vectors = self.load_document_vectors()
+        self.word_vectors = self.load_word_vectors()
+        self.dictionary = self.load_dictionary()
+        self.coo_matrix = self.load_co_matrix()
+    
     def vocabulary(self):
         return get_vocabulary(self.dictionary)
+
+    def load_dictionary(self):
+        return gensim.corpora.Dictionary.load("./data/program_data/dictionary")      
+    
+    def load_co_matrix(self):
+        with open('./data/co_matrix.json','r') as file:
+            matrix = json.load(file)
+        matrix = {tuple(key): value for (key, value) in matrix}
+        return dict(matrix)
+
+    def load_document_vectors(self):
+        with open('./data/document_vectors.json','r') as file1:
+            document_vectors = json.load(file1)
+        return {tuple(key): value for (key, value) in document_vectors}
+    
+    def load_word_vectors(self):
+        with open('./data/word_vectors.json','r') as file2:
+            word_vectors = json.load(file2)
+        return word_vectors 
 
 class Document:
     def __init__(self,id,title,data):
@@ -47,8 +67,8 @@ class Document:
         self.data = [token.lemma_ for token in self.data]
 
     def filter_by_occurrence(self,vocabulary):
-        self.data, _ = filter_by_occurrence(self.data,vocabulary)
-        
+        self.data,self.tags ,not_founded = filter_by_occurrence(self.data,self.tags,vocabulary)
+        return not_founded
 
     def to_doc2bow(self,dictionary):
         self.data = dictionary.doc2bow(self.data)
@@ -58,6 +78,7 @@ class Document:
 
     def add_words(self,words):
         self.data.extend(words)
+        self.tags.extend(["" for word in words])
 
     def replace_word(self,original,new):
         self.data = [new if word == original else word for word in self.data]
@@ -68,51 +89,39 @@ def get_dataset_from_external_files(data = None):
         return [Document(i,content[i],readfile('./data/external_data/' + content[i])) for i in range(0,len(content))] 
     else:
         dataset = ir_datasets.load(data)
-        return [Document(i, doc.title, doc.text) for i,doc in enumerate(dataset.docs_iter())]
+        return [Document(doc.doc_id, doc.title, doc.text) for doc in dataset.docs_iter()]
 
-def filter_by_occurrence(data,vocabulary):
+def filter_by_occurrence(data,tags,vocabulary):
         new_data = []
+        new_tags = []
         not_founded =[]
-        for word in data:
+        for i,word in enumerate(data):
             if word in vocabulary:
                 new_data.append(word)
+                new_tags.append(tags[i])
             else:
                 not_founded.append(word)
-        return new_data,not_founded
+        return new_data,new_tags ,not_founded
 
 def readfile(path):
     f = open(path,'r')
     text = f.read()
     f.close()
     return text  
-def load_dictionary():
-        return gensim.corpora.Dictionary.load("./data/program_data/dictionary")  
 
 def get_word_vectors(document_vectors,dictionary):
-    word_vectors = {i: [word,[]] for i,word in dictionary.iteritems()}
+    word_vectors = {i: [] for i,word in dictionary.iteritems()}
     for doc in document_vectors.keys():
-        for word in document_vectors[doc]:
-            word_vectors[word[0]][1].append(doc)
+        for word in document_vectors[doc].keys():
+            word_vectors[word].append(doc)
     return word_vectors
 
 
 def save_dates(document_vectors,dictionary):
     with open('./data/document_vectors.json','w') as file1:
-        json.dump(document_vectors,file1)
+        json.dump(list(document_vectors.items()),file1)
     with open('./data/word_vectors.json','w') as file2:
         json.dump(get_word_vectors(document_vectors,dictionary),file2)
-
-def load_co_matrix():
-    with open('./data/co_matrix.json','r') as file:
-        matrix = json.load(file)
-    return dict(matrix)
-
-def get_corpus():
-    with open('./data/document_vectors.json','r') as file1:
-        document_vectors = json.load(file1)
-    with open('./data/word_vectors.json','r') as file2:
-        word_vectors = json.load(file2)
-    return Corpus(document_vectors,word_vectors)
 
 def get_vocabulary(dictionary):
   vocabulary = list(dictionary.token2id.keys())

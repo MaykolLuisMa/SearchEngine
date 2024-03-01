@@ -11,52 +11,59 @@ def process_query(query,corpus):
 
     not_founded = doc_query.filter_by_occurrence(corpus.vocabulary())
     to_replace = [get_most_similar(word,corpus.vocabulary()) for word in not_founded]
+
+    print("No se encontraron las palabras:")
+    for w in not_founded:
+        print(w)
+    print("Se busco en su lugar:")
+    for w in to_replace:
+        print(w)
     doc_query.add_words(to_replace)
     
     expanded_query = expand_query(doc_query,corpus)
-
-    return [corpus.dictionary.doc2bow(l) for l in expanded_query]
+    print(expanded_query)
+    return [[w[0] for w in corpus.dictionary.doc2bow(l)] for l in expanded_query]
 
     
 def search_documents(final_query, corpus):
-    documents = []
-    sims = []
-    for key in corpus.document_vectors.keys():
-        documents.append(key)
-        sims.append(sim(final_query,corpus.document_vextors[key]))
-    return sorted(documents,sims,True)[:10]
+    documents = {}
+    for item in list(corpus.document_vectors.items()):
+        documents[item[0]] = sim(final_query, corpus,item)
+    return sorted(list(documents.items()),key = lambda item: item[1],reverse= True)[:10]
     
-def sim(final_query,document_vector,p = 5):
+def sim(final_query,corpus,document,p = 5):
     sum = 0
     for sub_query in final_query:
-        sum += math.pow(1-sim_or(sub_query,document_vector),p)
+        sum += 1-math.pow(1-sim_or(sub_query,corpus,document),p)
     return pow(sum/len(final_query),1/p)
 
-def sim_or(sub_query,document_vector,p = 2):
+def sim_or(sub_query,corpus,document,p = 2):
     sum = 0
-    for word in  sub_query:
-        sum += math.pow(document_vector[word],p)
+    for word in sub_query:
+        if str(word) in document[1].keys():
+            sum += math.pow(document[1][str(word)],p)
     return pow(sum/len(sub_query),1/p)
 
 def expand_query(doc_query, corpus):
     near_words = get_near_words(doc_query,corpus.dictionary,corpus.coo_matrix)
+    
     doc_query.add_words(near_words)
     
-    expanded_query = get_hypernyms(get_synsets(doc_query))
+    expanded_query = get_words_from_synsets(get_hypernyms(get_synsets(doc_query)))
     
-    return [filter_by_occurrence(l,corpus.vocabulary()) for l in expanded_query]
-def get_near_words(query,dictionary,matrix, n = 2):
-    scores = []
-    words = []
+    return [filter_by_occurrence(l,["" for w in l],corpus.vocabulary())[0] for l in expanded_query]
+
+def get_near_words(query,dictionary,matrix, n = 1):
+    words_scores = []
     for word in dictionary.token2id:
-        words.append(word)
         score = 0
         for qword in query.data:
             key = tuple(sorted([dictionary.token2id[word],dictionary.token2id[qword]]))
-            score += matrix[key]
-        scores.append(score)
-    words.sort(score,True)
-    return words[:n]
+            if key in matrix.keys():
+                score += matrix[key]
+        words_scores.append((word,score))
+    
+    return [w[0] for w in sorted(words_scores,key=lambda word_score: word_score[1],reverse=True)][:n]
 
 pos_tag_map = {
     'NOUN': [ wn.NOUN ],

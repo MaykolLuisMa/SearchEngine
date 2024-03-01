@@ -18,7 +18,7 @@ def calculate_tfidf(dataset):
     tfidf = gensim.models.TfidfModel(corpus, normalize = True)
     for doc in dataset:
         doc.to_vector(tfidf)
-    return {doc.title: {id: frec for id,frec in doc.data} for doc in dataset}
+    return {(doc.title, doc.id): {id: frec for id,frec in doc.data} for doc in dataset}
 
 def process_dataset(dataset):
     for doc in dataset:
@@ -28,7 +28,7 @@ def process_dataset(dataset):
     
 def build_dictionary(dataset,no_below=5, no_above=0.5):
     dictionary = gensim.corpora.Dictionary([doc.data for doc in dataset])
-    dictionary.filter_extremes(no_below=no_below, no_above=no_above)
+    #dictionary.filter_extremes(no_below=no_below, no_above=no_above)
     dictionary.save("./data/program_data/dictionary")
     vocabulary = get_vocabulary(dictionary)
     for doc in dataset:
@@ -40,7 +40,7 @@ def build_co_occurrence_matrix(documents,dictionary, windows_size = 2):
     matrix = {}
     for doc in documents:
         for i,token in enumerate(doc.data):
-            start = min(0,i-windows_size)
+            start = max(0,i-windows_size)
             end = min(len(doc.data),i+windows_size+1)
             for i2 in range(start,end):
                 if i2 == i:
@@ -50,6 +50,7 @@ def build_co_occurrence_matrix(documents,dictionary, windows_size = 2):
                     matrix[key] += 1/2
                 else:
                     matrix[key] = 1/2
+    
     with open('./data/co_matrix.json','w') as file:
         json.dump(list(matrix.items()),file)
                  
