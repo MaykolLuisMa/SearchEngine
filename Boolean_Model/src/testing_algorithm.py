@@ -1,27 +1,51 @@
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
-from procesing_query import *
 import random
+from model import *
     
+def get_querys(dataset):
+    return dataset.queries_iter()
+
+def evaluate_precition(model_classification,right_classification):
+    return precision_score(right_classification,model_classification)
+
+def evaluate_recover(model_classification,right_classification):
+    return recall_score(right_classification,model_classification)
+
+def evaluate_f1(model_classification,right_classification):
+    return f1_score(right_classification,model_classification)
+
+def evaluate_r_precition(model_classification,right_classification,r):
+    return precision_score(right_classification, model_classification[:r] + [0] * (len(model_classification) - r))
+
+def evaluate_fallout(model_classification,right_classification):
+    matrix = confusion_matrix(right_classification, model_classification)
+    print(matrix.ravel())
+    #tn, fp, fn, ft = matrix.ravel()
+    #return fp / (fp + tn)
+    return 0
 def evaluate(data_name = "cranfield"):
-    
-    corpus = Corpus()
 
     dataset = ir_datasets.load(data_name)
+    documents = [(doc.doc_id,doc.text) for doc in dataset.docs_iter()]
+
+    tokenized_docs = morphological_reduction_spacy(remove_stopwords_spacy(remove_noise_spacy(tokenization_spacy(documents))), True)
+
+    dictionary = get_dictionary(tokenized_docs)
+
+    tokenized_docs = filter_tokens_by_occurrence(tokenized_docs,dictionary)
+
+    corpus = vector_representation(tokenized_docs, dictionary, [],True)
 
     querys = get_querys(dataset)
 
     evaluations_list = [[],[],[],[],[],[],[]]
     for query in querys:
-        final_query = process_query(query.text,corpus)
-        
-        model_documents = search_documents(final_query,corpus)
-
+        model_documents = search(query,corpus)
         right_documents_id = get_right_documents(query.query_id,dataset)
-        model_classification, right_classification = get_classification(corpus.document_vectors,model_documents,right_documents_id)
+        model_classification, right_classification = get_classification(documents,model_documents,right_documents_id)
         evaluations = evaluate_all(model_classification, right_classification)
         print_evaluation(query.text,evaluations)
-
-        for i in range(0,len(evaluations_list)):
+        for i in range(0,7):
             evaluations_list[i].append(evaluations[i])
     averages = [average(l) for l in evaluations_list]
     print_evaluation("*Total*",averages)
@@ -53,13 +77,13 @@ def print_evaluation(query,evaluations):
     Fallout: {evaluations[6]}
     """)
 def get_classification(documents, model_documents, right_documents_id):
-    classification = {doc:[0,0] for doc in documents.keys()}
+    classification = {doc[0]:[0,0] for doc in documents}
     for mdoc in model_documents:
-        classification[mdoc.document.id][0] = 1
+        classification[mdoc][0] = 1
     for rdoc in right_documents_id:
         classification[rdoc][1] = 1
-    model_classification = [classification[key][0] for key in classification.keys()]
-    right_classification = [classification[key][1] for key in classification.keys()]
+    model_classification = [classification[key][0] for key in classification]
+    right_classification = [classification[key][1] for key in classification]
     return  model_classification, right_classification
 
 
@@ -71,30 +95,4 @@ def get_right_documents(query_id,dataset):
       if queryt_id == query_id and relevance in [3, 4]
     ])
 
-def get_querys(dataset):
-    return dataset.queries_iter()
-
-def get_limited_dataset(data):
-    documents = [Document(doc.id,doc.title,doc.text) for doc in data.docs_iter()]
-    random.shuffle(documents)
-    recovered_documents = documents[:random.randint(1, len(documents) - 1)]
-    return recovered_documents
-
-def evaluate_precition(model_classification,right_classification):
-    return precision_score(right_classification,model_classification)
-
-def evaluate_recover(model_classification,right_classification):
-    return recall_score(right_classification,model_classification)
-
-def evaluate_f1(model_classification,right_classification):
-    return f1_score(right_classification,model_classification)
-
-def evaluate_r_precition(model_classification,right_classification,r):
-    return precision_score(right_classification, model_classification[:r] + [0] * (len(model_classification) - r))
-
-def evaluate_fallout(model_classification,right_classification):
-    matrix = confusion_matrix(right_classification, model_classification)
-    #tn, fp, _, _ = matrix.ravel()
-    #return fp / (fp + tn)
-    return 0
 evaluate()

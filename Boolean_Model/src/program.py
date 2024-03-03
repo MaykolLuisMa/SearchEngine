@@ -1,18 +1,21 @@
 from model import *
 
-documents = load_dataset()
-tokenized_docs = morphological_reduction_spacy(remove_stopwords_spacy(remove_noise_spacy(tokenization_spacy(documents))), True)
-tokenized_docs = filter_tokens_by_occurrence(tokenized_docs)
+def ejecute():
+    documents = load_dataset("cranfield")
 
-vocabulary = build_vocabulary(dictionary)
+    tokenized_docs = morphological_reduction_spacy(remove_stopwords_spacy(remove_noise_spacy(tokenization_spacy(documents))), True)
 
+    dictionary = get_dictionary(tokenized_docs)
 
-corpus = vector_representation(tokenized_docs, dictionary, [],True)
+    tokenized_docs = filter_tokens_by_occurrence(tokenized_docs,dictionary)
 
-consulta = "A AND (B OR NOT C)"
-while(True):
-    consulta = input()
-    consulta_dnf = query_to_dnf(consulta,dictionary,vocabulary)
+    corpus = vector_representation(tokenized_docs, dictionary, [],True)
 
+    while(True):
+        print("Introduce your query:")
+        query = input()
+        procesed_query = process_query(query,dictionary)
+        docs = search(procesed_query,corpus)
+        print(docs)
 
-
+#docs = ir_datasets.load("cranfield")

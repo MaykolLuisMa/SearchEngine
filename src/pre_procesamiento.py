@@ -18,7 +18,7 @@ def calculate_tfidf(dataset):
     tfidf = gensim.models.TfidfModel(corpus, normalize = True)
     for doc in dataset:
         doc.to_vector(tfidf)
-    return {(doc.title, doc.id): {id: frec for id,frec in doc.data} for doc in dataset}
+    return dataset
 
 def process_dataset(dataset):
     for doc in dataset:

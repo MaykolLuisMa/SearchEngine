@@ -2,40 +2,43 @@ import ir_datasets
 import nltk
 import spacy
 import gensim
-from sympy import sympify, to_dnf, Not, And, Or
+from sympy import sympify, to_dnf, Not, And, Or, symbols
 
 nlp = spacy.load("en_core_web_sm")
-def load_dataset():
-    dataset = ir_datasets.load("cranfield")
-    return [doc.text for doc in dataset.docs_iter()]
+def load_dataset(data_name):
+    dataset = ir_datasets.load(data_name)
+    return [(doc.doc_id,doc.text) for doc in dataset.docs_iter()]
 
 def tokenization_spacy(texts):
-  return [[token for token in nlp(doc)] for doc in texts]
+  return [(id,[token for token in nlp(doc)]) for (id,doc) in texts]
 
 def remove_noise_spacy(tokenized_docs):
-  return [[token for token in doc if token.is_alpha] for doc in tokenized_docs]
+  return [(id,[token for token in doc if token.is_alpha]) for id,doc in tokenized_docs]
 
 def remove_stopwords_spacy(tokenized_docs):
   stopwords = spacy.lang.en.stop_words.STOP_WORDS
   return [
-      [token for token in doc if token.text not in stopwords] for doc in tokenized_docs
+      (id,[token for token in doc if token.text not in stopwords]) for id,doc in tokenized_docs
   ]
 
 def morphological_reduction_spacy(tokenized_docs, use_lemmatization=True):
   stemmer = nltk.stem.PorterStemmer()
   return [
-    [token.lemma_ if use_lemmatization else stemmer.stem(token.text) for token in doc]
-    for doc in tokenized_docs
+    (id,[token.lemma_ if use_lemmatization else stemmer.stem(token.text) for token in doc])
+    for id,doc in tokenized_docs
   ]
-def filter_tokens_by_occurrence(tokenized_docs, no_below=5, no_above=0.5):
-  global dictionary
-  dictionary = gensim.corpora.Dictionary(tokenized_docs)
-  dictionary.filter_extremes(no_below=no_below, no_above=no_above)
 
+def get_dictionary(tokenized_docs,no_below=5, no_above=0.5):
+  dictionary = gensim.corpora.Dictionary([doc for _,doc in tokenized_docs])
+  dictionary.filter_extremes(no_below=no_below, no_above=no_above)
+  return dictionary
+
+def filter_tokens_by_occurrence(tokenized_docs,dictionary):
+  
   filtered_words = [word for _, word in dictionary.iteritems()]
   filtered_tokens = [
-      [word for word in doc if word in filtered_words]
-      for doc in tokenized_docs
+      (id,[word for word in doc if word in filtered_words])
+      for id,doc in tokenized_docs
   ]
 
   return filtered_tokens
@@ -45,7 +48,7 @@ def build_vocabulary(dictionary):
   return vocabulary
 
 def vector_representation(tokenized_docs, dictionary, vector_repr, use_bow=True):
-    corpus = [dictionary.doc2bow(doc) for doc in tokenized_docs]
+    corpus = [(id,dictionary.doc2bow(doc)) for id,doc in tokenized_docs]
 
     if use_bow:
         vector_repr = corpus

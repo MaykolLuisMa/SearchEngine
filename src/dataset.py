@@ -1,4 +1,3 @@
-import nltk
 import spacy
 import gensim
 import ir_datasets
@@ -30,7 +29,7 @@ class Corpus:
     def load_document_vectors(self):
         with open('./data/document_vectors.json','r') as file1:
             document_vectors = json.load(file1)
-        return {tuple(key): value for (key, value) in document_vectors}
+        return {id: Document(id,title,data) for id, title, data in document_vectors}
     
     def load_word_vectors(self):
         with open('./data/word_vectors.json','r') as file2:
@@ -74,7 +73,7 @@ class Document:
         self.data = dictionary.doc2bow(self.data)
     
     def to_vector(self,tfidf):
-        self.data = tfidf[self.data]
+        self.data = {id: frec for id,frec in tfidf[self.data]}
 
     def add_words(self,words):
         self.data.extend(words)
@@ -111,17 +110,18 @@ def readfile(path):
 
 def get_word_vectors(document_vectors,dictionary):
     word_vectors = {i: [] for i,word in dictionary.iteritems()}
-    for doc in document_vectors.keys():
-        for word in document_vectors[doc].keys():
-            word_vectors[word].append(doc)
+    for doc in document_vectors:
+        for word in doc.data.keys():
+            word_vectors[word].append(doc.id)
     return word_vectors
 
 
-def save_dates(document_vectors,dictionary):
+def save_dates(dataset,dictionary):
+    document_vectors = [(doc.id,doc.title,doc.data) for doc in dataset]
     with open('./data/document_vectors.json','w') as file1:
-        json.dump(list(document_vectors.items()),file1)
+        json.dump(document_vectors,file1)
     with open('./data/word_vectors.json','w') as file2:
-        json.dump(get_word_vectors(document_vectors,dictionary),file2)
+        json.dump(get_word_vectors(dataset,dictionary),file2)
 
 def get_vocabulary(dictionary):
   vocabulary = list(dictionary.token2id.keys())

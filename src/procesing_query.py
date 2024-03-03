@@ -8,7 +8,6 @@ def process_query(query,corpus):
     doc_query = Document(None,'query',query)
     doc_query.process()
     
-
     not_founded = doc_query.filter_by_occurrence(corpus.vocabulary())
     to_replace = [get_most_similar(word,corpus.vocabulary()) for word in not_founded]
 
@@ -24,13 +23,18 @@ def process_query(query,corpus):
     print(expanded_query)
     return [[w[0] for w in corpus.dictionary.doc2bow(l)] for l in expanded_query]
 
+class RankedDocument:
+    def __init__(self,document,relevance):
+        self.document = document
+        self.relevance = relevance
     
 def search_documents(final_query, corpus):
-    documents = {}
+    ranked_documents = []
     for item in list(corpus.document_vectors.items()):
-        documents[item[0]] = sim(final_query, corpus,item)
-    return sorted(list(documents.items()),key = lambda item: item[1],reverse= True)[:10]
-    
+        ranked_documents.append(RankedDocument(item[1],sim(final_query, corpus,item[1])))
+    ranked_documents = sorted(ranked_documents,key = lambda item: item.relevance,reverse=True)
+    return [doc for doc in ranked_documents if doc.relevance > 0.5]
+
 def sim(final_query,corpus,document,p = 5):
     sum = 0
     for sub_query in final_query:
@@ -40,8 +44,8 @@ def sim(final_query,corpus,document,p = 5):
 def sim_or(sub_query,corpus,document,p = 2):
     sum = 0
     for word in sub_query:
-        if str(word) in document[1].keys():
-            sum += math.pow(document[1][str(word)],p)
+        if str(word) in document.data.keys():
+            sum += math.pow(document.data[str(word)],p)
     return pow(sum/len(sub_query),1/p)
 
 def expand_query(doc_query, corpus):
