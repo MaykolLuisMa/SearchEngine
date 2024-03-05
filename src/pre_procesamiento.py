@@ -10,15 +10,16 @@ def generate_corpus(dataset):
     for doc in dataset:
         doc.to_doc2bow(dictionary)
 
-    document_vectors = calculate_tfidf(dataset)
-    save_dates(document_vectors,dictionary)
+    documents,idfs = calculate_tfidf(dataset)
+    save_dates(documents,idfs,dictionary)
 
 def calculate_tfidf(dataset):
     corpus = [doc.data for doc in dataset]
     tfidf = gensim.models.TfidfModel(corpus, normalize = True)
+    idfs = tfidf.idfs
     for doc in dataset:
         doc.to_vector(tfidf)
-    return dataset
+    return dataset,idfs
 
 def process_dataset(dataset):
     for doc in dataset:
@@ -28,7 +29,16 @@ def process_dataset(dataset):
     
 def build_dictionary(dataset,no_below=5, no_above=0.5):
     dictionary = gensim.corpora.Dictionary([doc.data for doc in dataset])
-    #dictionary.filter_extremes(no_below=no_below, no_above=no_above)
+    for i,item in enumerate(list(dictionary.items())):
+        print(item)
+        if(i == 10):
+            break
+    print("---")
+    for i,item in enumerate(list(dictionary.token2id.items())):
+        print(item)
+        if(i == 10):
+            break
+#    dictionary.filter_extremes(no_below=no_below, no_above=no_above)
     dictionary.save("./data/program_data/dictionary")
     vocabulary = get_vocabulary(dictionary)
     for doc in dataset:

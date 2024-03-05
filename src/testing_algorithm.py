@@ -1,5 +1,5 @@
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
-from procesing_query import *
+from recomendation_system import *
 import random
     
 def evaluate(data_name = "cranfield"):
@@ -10,34 +10,31 @@ def evaluate(data_name = "cranfield"):
 
     querys = get_querys(dataset)
 
-    evaluations_list = [[],[],[],[],[],[],[]]
-    for query in querys:
-        final_query = process_query(query.text,corpus)
-        
-        model_documents = search_documents(final_query,corpus)
+    evaluations_list = [[],[],[],[]]
+    for i,query in enumerate(querys):
+
+        print("-------------------------------------------------------")
+        print("the query: ")
+        print(query.text)
+        final_query,q = process_query(query.text,corpus)        
+        model_documents = search_documents(final_query,q,corpus)
 
         right_documents_id = get_right_documents(query.query_id,dataset)
+        if(len(right_documents_id) == 0):
+            continue
         model_classification, right_classification = get_classification(corpus.document_vectors,model_documents,right_documents_id)
-        evaluations = evaluate_all(model_classification, right_classification)
+        evaluations = get_stats(get_confusion_matrix(right_classification,model_classification))
         print_evaluation(query.text,evaluations)
-
         for i in range(0,len(evaluations_list)):
             evaluations_list[i].append(evaluations[i])
+        
+
     averages = [average(l) for l in evaluations_list]
     print_evaluation("*Total*",averages)
     
 def average(l):
     return sum(l)/len(l)
 
-def evaluate_all(model_classification, right_classification):
-    p = evaluate_precition(model_classification,right_classification)
-    r = evaluate_recover(model_classification,right_classification)
-    f1 = evaluate_f1(model_classification,right_classification)
-    p1 = evaluate_r_precition(model_classification,right_classification,1)
-    p5 = evaluate_r_precition(model_classification,right_classification,5)
-    p10 = evaluate_r_precition(model_classification,right_classification,10)
-    fo = evaluate_fallout(model_classification,right_classification)
-    return [p,r,f1,p1,p5,p10,fo]
 
 def print_evaluation(query,evaluations):
     print(f"""
@@ -47,12 +44,13 @@ def print_evaluation(query,evaluations):
     Precisión: {evaluations[0]}
     Recobrado: {evaluations[1]}
     F1: {evaluations[2]}
-    1-Precisión: {evaluations[3]}
-    5-Precisión: {evaluations[4]}
-    10-Precisión: {evaluations[5]}
-    Fallout: {evaluations[6]}
+    Fallout: {evaluations[3]}
     """)
 def get_classification(documents, model_documents, right_documents_id):
+    print("lenths")
+    print(len(documents))
+    print(len(right_documents_id))
+    print(len(model_documents))
     classification = {doc:[0,0] for doc in documents.keys()}
     for mdoc in model_documents:
         classification[mdoc.document.id][0] = 1
@@ -68,7 +66,7 @@ def get_right_documents(query_id,dataset):
     [
       doc_id
       for (queryt_id, doc_id, relevance, _) in dataset.qrels_iter()
-      if queryt_id == query_id and relevance in [3, 4]
+      if queryt_id == query_id and relevance in [1,2,3, 4]
     ])
 
 def get_querys(dataset):
@@ -80,21 +78,20 @@ def get_limited_dataset(data):
     recovered_documents = documents[:random.randint(1, len(documents) - 1)]
     return recovered_documents
 
-def evaluate_precition(model_classification,right_classification):
-    return precision_score(right_classification,model_classification)
+def get_confusion_matrix(right_classification,model_classification):
+    matrix = confusion_matrix(right_classification,model_classification).ravel()
+    return tuple(matrix)
 
-def evaluate_recover(model_classification,right_classification):
-    return recall_score(right_classification,model_classification)
+def get_stats(matrix):
+    tn, fp, fn, tp = matrix
+    precition = tp/(tp+fp)
+    recover = tp/(tp+fn)
+    if tp + fn == 0:
+        recover = 0
+    f1 = (2*precition*recover)/(precition+recover)
+    if (precition+recover) == 0:
+        f1 = 0
+    fallout = fp/(fp+tn)
+    return [precition,recover,f1,fallout]
 
-def evaluate_f1(model_classification,right_classification):
-    return f1_score(right_classification,model_classification)
-
-def evaluate_r_precition(model_classification,right_classification,r):
-    return precision_score(right_classification, model_classification[:r] + [0] * (len(model_classification) - r))
-
-def evaluate_fallout(model_classification,right_classification):
-    matrix = confusion_matrix(right_classification, model_classification)
-    #tn, fp, _, _ = matrix.ravel()
-    #return fp / (fp + tn)
-    return 0
 evaluate()

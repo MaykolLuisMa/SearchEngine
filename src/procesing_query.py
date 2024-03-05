@@ -1,124 +1,43 @@
-from pre_procesamiento import *
-from nltk.corpus import wordnet as wn
-from nltk.wsd import lesk
-import Levenshtein
-import re
-import math
-def process_query(query,corpus):
+from query_expansion import *
+def process_query(query,corpus, search_alternative = False, expand = False):
     doc_query = Document(None,'query',query)
     doc_query.process()
     
     not_founded = doc_query.filter_by_occurrence(corpus.vocabulary())
-    to_replace = [get_most_similar(word,corpus.vocabulary()) for word in not_founded]
-
-    print("No se encontraron las palabras:")
-    for w in not_founded:
-        print(w)
-    print("Se busco en su lugar:")
-    for w in to_replace:
-        print(w)
-    doc_query.add_words(to_replace)
+    to_replace = print_not_founded_info(not_founded,corpus)
     
-    expanded_query = expand_query(doc_query,corpus)
-    print(expanded_query)
-    return [[w[0] for w in corpus.dictionary.doc2bow(l)] for l in expanded_query]
-
-class RankedDocument:
-    def __init__(self,document,relevance):
-        self.document = document
-        self.relevance = relevance
-    
-def search_documents(final_query, corpus):
-    ranked_documents = []
-    for item in list(corpus.document_vectors.items()):
-        ranked_documents.append(RankedDocument(item[1],sim(final_query, corpus,item[1])))
-    ranked_documents = sorted(ranked_documents,key = lambda item: item.relevance,reverse=True)
-    return [doc for doc in ranked_documents if doc.relevance > 0.5]
-
-def sim(final_query,corpus,document,p = 5):
-    sum = 0
-    for sub_query in final_query:
-        sum += 1-math.pow(1-sim_or(sub_query,corpus,document),p)
-    return pow(sum/len(final_query),1/p)
-
-def sim_or(sub_query,corpus,document,p = 2):
-    sum = 0
-    for word in sub_query:
-        if str(word) in document.data.keys():
-            sum += math.pow(document.data[str(word)],p)
-    return pow(sum/len(sub_query),1/p)
-
-def expand_query(doc_query, corpus):
-    near_words = get_near_words(doc_query,corpus.dictionary,corpus.coo_matrix)
-    
-    doc_query.add_words(near_words)
-    
-    expanded_query = get_words_from_synsets(get_hypernyms(get_synsets(doc_query)))
-    
-    return [filter_by_occurrence(l,["" for w in l],corpus.vocabulary())[0] for l in expanded_query]
-
-def get_near_words(query,dictionary,matrix, n = 1):
-    words_scores = []
-    for word in dictionary.token2id:
-        score = 0
-        for qword in query.data:
-            key = tuple(sorted([dictionary.token2id[word],dictionary.token2id[qword]]))
-            if key in matrix.keys():
-                score += matrix[key]
-        words_scores.append((word,score))
-    
-    return [w[0] for w in sorted(words_scores,key=lambda word_score: word_score[1],reverse=True)][:n]
-
-pos_tag_map = {
-    'NOUN': [ wn.NOUN ],
-    'ADJ': [ wn.ADJ, wn.ADJ_SAT ],
-    'ADV': [ wn.ADV ],
-    'VERB': [ wn.VERB ]
-}
-
-def get_synsets(doc_query):
-    synsets = []
-    for i in range(0,len(doc_query.data)):
-        synsets.append([doc_query.data[i]])
-        if doc_query.tags[i] not in pos_tag_map.keys():
-            continue
+    if len(doc_query.data) == 0:
+        if search_alternative:
+            doc_query.add_words(to_replace)
         else:
-            synsets[i].extend(wn.synsets(doc_query.data[i], pos_tag_map[doc_query.tags[i]]))
-    return synsets
+            return []
+    q = corpus.dictionary.doc2bow(doc_query.data)
+    doc_query.data = [corpus.dictionary[id] for id,_ in q] 
+    
+    expanded_query = []
+    q_near_words = []
+    if expand:
+        expanded_query,q_near_words = expand_query(doc_query,corpus)
+    else:
+        expanded_query = [[word] for word in doc_query.data]
+    
+    print("expanded_query:")
+    print(expanded_query)
+    
+    expanded_query = [[w[0] for w in corpus.dictionary.doc2bow(l)] for l in expanded_query]
+    
+    q = calculate_tfidf_query(q,q_near_words,expanded_query,corpus)
 
-def get_hypernyms(synsets):
-    for synset in synsets:
-        hypers = []
-        for i in range(1,len(synset)):
-            hypers.extend(synset[i].hypernyms())
-        synset.extend(hypers)
-    return synsets
+    return expanded_query,q
 
-def get_words_from_synsets(synsets):
-    tokens = []
-    for synset in synsets:
-        tokens.append([synset[0]])
-        for i in range(1,len(synset)):
-            w = synset[i].name().split('.')[0]
-            if w in tokens[len(tokens)-1]:
-                continue
-            else:
-                tokens[len(tokens)-1].append(w)
-    return [underscore_replacer(l) for l in tokens]
+def calculate_tfidf_query(q,q_near_words,expanded_query,corpus):
+    q_near_words = [(id,seq) for id,seq in q_near_words if id not in [item for item,_ in q]]
+    q.extend(q_near_words)
+    for items in expanded_query:
+        for item in items:
+            if item not in [w for w,_ in q]:
+                q.append((item,0.5))
+    q = gensim.models.TfidfModel([q,[]],normalize = True)[q]
+    q = {id: tf*corpus.word_vectors[id].idf for id,tf in q}
+    return q
 
-def get_most_similar(word,vocanulary):
-    current_distance = 10000
-    current_word = ""
-    for w in vocanulary:
-        new_distance = Levenshtein.distance(word,w)
-        if(new_distance < current_distance):
-            current_distance = new_distance
-            current_word = w
-    return current_word
-
-def underscore_replacer(tokens):
-    new_tokens = []
-    for token in tokens:
-        new_token = re.sub(r'_', ' ', token)
-        new_tokens.append(new_token)
-    return new_tokens
